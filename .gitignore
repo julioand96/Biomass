@@ -22,3 +22,8 @@ csiro-biomass.zip
 data/
 submission.csv
 temp_output/
+context/csiro_biomass_context_en.md
+context/csiro_biomass_context_es.md
+context/csiro_biomass_prompt_en.md
+context/csiro_biomass_prompt_es.md
+furtherinst.md
