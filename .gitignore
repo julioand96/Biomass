@@ -16,3 +16,9 @@ env/
 
 # Dataset files
 dataset/
+
+# Added by Gemini
+csiro-biomass.zip
+data/
+submission.csv
+temp_output/

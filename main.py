@@ -33,14 +33,14 @@ data/
 ```
 
 Example usage:
-    python mvp.py --data-dir data
+    python main.py --data-dir data
 
 This will train the model on the training set, evaluate it on an
 internal validation set, and write `submission.csv` into the current
 working directory.  Adjust the `--val-size` argument to change the
 proportion of data held out for validation.
 
-Author: OpenAI Assistant
+Author: Julio Camargo
 Date: 2025-12-07
 """
 
@@ -118,7 +118,7 @@ def extract_image_features(img_path: Path) -> np.ndarray:
 
 
 def load_and_prepare_data(
-    train_csv: Path, images_dir: Path
+    train_csv: Path, images_dir: Path, data_dir: Path
 ) -> Tuple[pd.DataFrame, pd.DataFrame, List[str]]:
     """Load the training data and prepare feature and target matrices.
 
@@ -139,6 +139,8 @@ def load_and_prepare_data(
     images_dir : Path
         Directory containing the training images.  The `image_path`
         column in the CSV is resolved relative to this directory.
+    data_dir : Path
+        Path to the data directory.
 
     Returns
     -------
@@ -182,7 +184,7 @@ def load_and_prepare_data(
     logging.info("Extracting image features...")
     image_feature_list = []
     for img_rel_path in full_df["image_path"]:
-        img_path = images_dir / img_rel_path
+        img_path = data_dir / img_rel_path
         image_feature_list.append(extract_image_features(img_path))
     image_features = np.vstack(image_feature_list)
     image_feature_cols = [
@@ -218,6 +220,8 @@ def load_and_prepare_data(
 
     # Categorical columns for one‑hot encoding
     categorical_cols = ["State", "Species"]
+    for col in categorical_cols:
+        X[col] = X[col].fillna("missing")
 
     return X, y, categorical_cols
 
@@ -397,6 +401,7 @@ def predict_test(
     test_csv: Path,
     images_dir: Path,
     categorical_cols: List[str],
+    data_dir: Path,
 ) -> pd.DataFrame:
     """Generate predictions for the test set.
 
@@ -412,7 +417,8 @@ def predict_test(
         Directory containing the test images.
     categorical_cols : List[str]
         Categorical columns requiring encoding.
-
+    data_dir : Path
+        Path to the data directory.
     Returns
     -------
     pd.DataFrame
@@ -430,7 +436,7 @@ def predict_test(
     logging.info("Extracting image features for test set...")
     img_feat_dict = {}
     for img_rel_path in unique_imgs:
-        img_path = images_dir / img_rel_path
+        img_path = data_dir / img_rel_path
         img_feat_dict[img_rel_path] = extract_image_features(img_path)
 
     # Build a DataFrame with one row per unique image
@@ -486,6 +492,7 @@ def predict_test(
     for col in categorical_cols:
         if col not in X_test.columns:
             X_test[col] = "missing"
+        X_test[col] = X_test[col].fillna("missing")
     if "Pre_GSHH_NDVI" not in X_test.columns:
         X_test["Pre_GSHH_NDVI"] = 0.0
     if "Height_Ave_cm" not in X_test.columns:
@@ -537,7 +544,7 @@ def main():
     parser.add_argument(
         "--data-dir",
         type=str,
-        default="data",
+        default="/kaggle/input/csiro-biomass",
         help="Directory containing train.csv, test.csv and image folders",
     )
     parser.add_argument(
@@ -545,6 +552,12 @@ def main():
         type=float,
         default=0.2,
         help="Fraction of training data reserved for validation",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="/kaggle/working/",
+        help="Directory to save output files (e.g., submission.csv, trained models)",
     )
     args = parser.parse_args()
 
@@ -555,7 +568,7 @@ def main():
     test_images_dir = data_dir / "test"
 
     # Load and prepare training data
-    X, y, categorical_cols = load_and_prepare_data(train_csv, train_images_dir)
+    X, y, categorical_cols = load_and_prepare_data(train_csv, train_images_dir, data_dir)
 
     # Train the model
     model, preprocessor, val_score = train_model(
@@ -566,11 +579,13 @@ def main():
 
     # Predict on test set
     submission_df = predict_test(
-        model, preprocessor, test_csv, test_images_dir, categorical_cols
+        model, preprocessor, test_csv, test_images_dir, categorical_cols, data_dir
     )
 
     # Save submission file
-    submission_path = Path("submission.csv")
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    submission_path = output_dir / "submission.csv"
     submission_df.to_csv(submission_path, index=False)
     logging.info(f"Submission file written to {submission_path.resolve()}")
 
